@@ -1,0 +1,87 @@
+import cv2
+import numpy as np
+
+def process_image(image_path, output_path):
+    # Load the image
+    image = cv2.imread(image_path)
+
+    # Check if the image was loaded correctly
+    if image is None:
+        print("Error: Could not load image.")
+        return
+
+    # Convert the image to HSV for color segmentation
+    hsv_image = cv2.cvtColor(image, cv2.COLOR_BGR2HSV)
+
+    # Define color ranges for segmentation (burnt grass, green grass, red and blue houses)
+    brown_lower = np.array([10, 100, 20])
+    brown_upper = np.array([20, 255, 200])
+    green_lower = np.array([36, 100, 100])
+    green_upper = np.array([86, 255, 255])
+    red_lower = np.array([0, 100, 100])
+    red_upper = np.array([10, 255, 255])
+    blue_lower = np.array([110, 100, 100])
+    blue_upper = np.array([130, 255, 255])
+
+    # Create masks for each category
+    burnt_grass_mask = cv2.inRange(hsv_image, brown_lower, brown_upper)
+    green_grass_mask = cv2.inRange(hsv_image, green_lower, green_upper)
+    red_mask = cv2.inRange(hsv_image, red_lower, red_upper)
+    blue_mask = cv2.inRange(hsv_image, blue_lower, blue_upper)
+
+    # Initialize counters
+    houses_on_burnt = 0
+    houses_on_green = 0
+    priority_burnt = 0
+    priority_green = 0
+
+    # Process red houses
+    contours_red, _ = cv2.findContours(red_mask, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_SIMPLE)
+    for cnt in contours_red:
+        x, y, w, h = cv2.boundingRect(cnt)
+        house_center = (x + w // 2, y + h // 2)
+        if burnt_grass_mask[house_center[1], house_center[0]] > 0:
+            houses_on_burnt += 1
+            priority_burnt += 1  # Red house has priority 1
+        else:
+            houses_on_green += 1
+            priority_green += 1
+
+    # Process blue houses
+    contours_blue, _ = cv2.findContours(blue_mask, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_SIMPLE)
+    for cnt in contours_blue:
+        x, y, w, h = cv2.boundingRect(cnt)
+        house_center = (x + w // 2, y + h // 2)
+        if burnt_grass_mask[house_center[1], house_center[0]] > 0:
+            houses_on_burnt += 1
+            priority_burnt += 2  # Blue house has priority 2
+        else:
+            houses_on_green += 1
+            priority_green += 2
+
+    # Calculate rescue ratio
+    rescue_ratio = priority_burnt / priority_green if priority_green > 0 else float('inf')
+
+    # Modify the original image to overlay colors (for visual output)
+    image[burnt_grass_mask > 0] = [0, 255, 255]  # Yellow for burnt grass
+    image[green_grass_mask > 0] = [0, 255, 0]    # Green for green grass
+    image[red_mask > 0] = [0, 0, 255]            # Red for red houses
+    image[blue_mask > 0] = [255, 0, 0]           # Blue for blue houses
+
+    # Save the modified image as output
+    cv2.imwrite(output_path, image)
+
+    # Display the modified image
+    cv2.imshow('Output Image', image)
+    cv2.waitKey(0)
+    cv2.destroyAllWindows()
+
+    # Print the numerical results
+    print(f"Houses on burnt grass: {houses_on_burnt}")
+    print(f"Houses on green grass: {houses_on_green}")
+    print(f"Total priority on burnt grass: {priority_burnt}")
+    print(f"Total priority on green grass: {priority_green}")
+    print(f"Rescue ratio (Pb/Pg): {rescue_ratio}")
+
+# Example usage
+process_image('/Users/ishanjaiswal/Downloads/uas takimages/1.png', '/Users/ishanjaiswal/Downloads/uas takimages/output_1.png')
